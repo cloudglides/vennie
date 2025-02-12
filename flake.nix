@@ -64,8 +64,7 @@
             ffmpeg
             # mix needs it for downloading dependencies
             git
-
-            # probably needed for your Phoenix assets
+            yt-dlp # probably needed for your Phoenix assets
             nodejs_20
           ]
           ++

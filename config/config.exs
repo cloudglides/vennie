@@ -9,11 +9,12 @@ if config_env() in [:dev, :test] do
 end
 
 
+config :logger, level: :info
+
 config :nostrum,
   token: System.get_env("TOKEN"), 
   gateway_intents: :all,
-  streamlink: false,
-  youtubedl: false
+  streamlink: false
 
 
 
