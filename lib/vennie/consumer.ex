@@ -21,7 +21,13 @@ defmodule Vennie.Consumer do
   def handle_event({:THREAD_CREATE, thread, _ws_state}) do
     if thread.parent_id == 1068808327716405329 and is_nil(thread.member) do
       Process.sleep(500)  # Small delay to prevent duplicates
-      Nostrum.Api.create_message(thread.id, "Hi! Welcome to the new thread!")
+      Nostrum.Api.create_message(thread.id, "Hey <a:hey:1339161785961545779>, <@#{thread.owner_id}>
+*  Consider reading https://discord.com/channels/1022510020736331806/1268430786332332107  to improve your question!
+* Explain what exactly your issue is.
+* Post the full error stack trace, not just the top part!
+* Show your code!")
+
+      Logger.debug(thread)
     else
       :noop
     end
