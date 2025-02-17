@@ -24,7 +24,9 @@ defmodule Vennie.MixProject do
     [
    {:nostrum, "~> 0.10"},
    {:porcelain, "~> 2.0"},
-      {:telemetry, "~> 1.0"}
+   {:telemetry, "~> 1.0"},
+   {:ecto_sql, "~> 3.10"},
+    {:ecto_sqlite3, "~> 0.12"}
     ]
   end
 end
