@@ -23,7 +23,8 @@ defmodule Vennie.MixProject do
   defp deps do
     [
    {:nostrum, "~> 0.10"},
-   {:porcelain, "~> 2.0"}
+   {:porcelain, "~> 2.0"},
+      {:telemetry, "~> 1.0"}
     ]
   end
 end

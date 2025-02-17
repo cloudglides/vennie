@@ -8,10 +8,11 @@ if config_env() in [:dev, :test] do
   end
 end
 
-config :logger, level: :debug
 config :nostrum,
   token: System.get_env("TOKEN"), 
   gateway_intents: :all,
+  ws_heartbeat_interval: 5_000,  # 30 seconds
+  await_guild_timeout: 30_000,
   force_http1: false,
   streamlink: false,
   youtubedl: false

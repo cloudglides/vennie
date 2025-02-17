@@ -4,6 +4,8 @@ defmodule Vennie.Consumer do
 
   @prefix ~w(v V)
   @required_role_id 1339183257736052777
+  @misc_commands ~w(howgay hg)
+  @mod_commands ~w(websocket ws mute m unmute um lock l)
 
   # Handle the READY event
   def handle_event({:READY, _data, ws_state}) do
@@ -18,26 +20,32 @@ defmodule Vennie.Consumer do
     case parse_command(msg.content) do
       {command, args} ->
         Logger.debug("Command: #{command}, args: #{inspect(args)}")
-        
-        if is_nil(msg.guild_id) do
-          # React with ❌ if the command is used in DMs
-          Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
-          :ignore
-        else
-          case Nostrum.Api.get_guild_member(msg.guild_id, msg.author.id) do
-            {:ok, member} ->
-              if Enum.member?(member.roles, @required_role_id) do
-                # Execute the command if the user has the required role
-                execute_command(command, %{msg: msg, args: args})
-              else
-                # React with ❌ if the user doesn't have the required role
-                Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
-                :ignore
-              end
+        context = %{msg: msg, args: args}
 
-            {:error, reason} ->
-              Logger.error("Failed to fetch member: #{inspect(reason)}")
-              :ignore
+        # If the command belongs to Commands.Miscellaneous, execute it regardless of role.
+        if command in @misc_commands do
+          execute_command(command, context)
+        else
+          # For non-miscellaneous (e.g. moderation) commands, continue with the role check.
+          if is_nil(msg.guild_id) do
+            # React with ❌ if the command is used in DMs
+            Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
+            :ignore
+          else
+            case Nostrum.Api.get_guild_member(msg.guild_id, msg.author.id) do
+              {:ok, member} ->
+                if Enum.member?(member.roles, @required_role_id) do
+                  execute_command(command, context)
+                else
+                  # React with ❌ if the user doesn't have the required role
+                  Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
+                  :ignore
+                end
+
+              {:error, reason} ->
+                Logger.error("Failed to fetch member: #{inspect(reason)}")
+                :ignore
+            end
           end
         end
 
@@ -84,12 +92,17 @@ defmodule Vennie.Consumer do
   end
 
   # Execute commands based on the parsed command
+  defp execute_command(cmd, context) when cmd in ["howgay", "hg"], do: Commands.Miscellaneous.howgay(context)
   defp execute_command(cmd, context) when cmd in ["websocket", "ws"], do: Commands.Moderation.websocket(context)
   defp execute_command(cmd, context) when cmd in ["mute", "m"], do: Commands.Moderation.mute(context)
   defp execute_command(cmd, context) when cmd in ["unmute", "um"], do: Commands.Moderation.unmute(context)
   defp execute_command(cmd, context) when cmd in ["lock", "l"], do: Commands.Moderation.lock(context)
+    defp execute_command(cmd, context) when cmd in ["kick", "k"], do: Commands.Moderation.kick(context)
+    defp execute_command(cmd, context) when cmd in ["ban", "b"], do: Commands.Moderation.ban(context)
+
   defp execute_command(cmd, _) do
     Logger.debug("Unknown command: #{cmd}")
     :ignore
   end
 end
+
