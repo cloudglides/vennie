@@ -5,7 +5,8 @@ defmodule Vennie.Application do
       Vennie.NetworkMonitor,
       Vennie.Consumer,
       Vennie.GatewayTracker,
-      Vennie.Repo
+      Vennie.Repo,
+      Commands.Music
     ]
 
     opts = [strategy: :one_for_one, name: Vennie.Supervisor]

@@ -3,11 +3,15 @@ defmodule Vennie.Repo.Migrations.CreateBansAndHowGay do
 
   def change do
     create table(:bans) do
-      add :user_id, :bigint, null: false
-      add :ban_reason, :text, null: false
+      add :user_id, :integer
+      add :ban_reason, :string
+      add :banned_by, :integer
+      add :banned_at, :utc_datetime
 
       timestamps()
     end
+
+    create index(:bans, [:user_id])
 
     create table(:howgay) do
       add :user_id, :bigint, null: false

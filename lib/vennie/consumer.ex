@@ -92,9 +92,18 @@ defmodule Vennie.Consumer do
   end
 
   # Execute commands based on the parsed command
+   defp execute_command(cmd, context) when cmd in ["join", "j"], do: Commands.Music.handle_join(context)
+    defp execute_command(cmd, context) when cmd in ["volume", "v"], do: Commands.Music.volume(context)
+    defp execute_command(cmd, context) when cmd in ["backward", "bw"], do: Commands.Music.backward(context)
+  defp execute_command(cmd, context) when cmd in ["queue", "q"], do: Commands.Music.queue(context)
+  defp execute_command(cmd, context) when cmd in ["skip", "s"], do: Commands.Music.skip(context)
+  defp execute_command(cmd, context) when cmd in ["forward", "fw"], do: Commands.Music.forward(context)
+defp execute_command(cmd, context) when cmd in ["p", "play"], do: Commands.Music.handle_play(context)
   defp execute_command(cmd, context) when cmd in ["howgay", "hg"], do: Commands.Miscellaneous.howgay(context)
   defp execute_command(cmd, context) when cmd in ["websocket", "ws"], do: Commands.Moderation.websocket(context)
   defp execute_command(cmd, context) when cmd in ["mute", "m"], do: Commands.Moderation.mute(context)
+   defp execute_command(cmd, context) when cmd in ["wb", "whyban", "whybanne"], do: Commands.Moderation.baninfo(context)
+   defp execute_command(cmd, context) when cmd in ["unban", "ub"], do: Commands.Moderation.unban(context)
   defp execute_command(cmd, context) when cmd in ["unmute", "um"], do: Commands.Moderation.unmute(context)
   defp execute_command(cmd, context) when cmd in ["lock", "l"], do: Commands.Moderation.lock(context)
     defp execute_command(cmd, context) when cmd in ["kick", "k"], do: Commands.Moderation.kick(context)

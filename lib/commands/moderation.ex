@@ -2,13 +2,19 @@ defmodule Commands.Moderation do
   require Logger
   alias Nostrum.Api
   alias Commands.Helpers.Duration
+  alias Vennie.Repo
+  alias Vennie.Ban
+  import Ecto.Query
   import Bitwise
 
   @ban_permission 0x00000004
   @kick_permission 0x00000002
-  @administrator  0x00000008
+  @administrator 0x00000008
+  @manage_channels 0x00000010
 
-  # Checks whether the invoking member has the required permission.
+  # ---------------------------
+  # Permission Checking
+  # ---------------------------
   defp check_permission(%{msg: msg} = context, required_permission) do
     case Api.get_guild_member(msg.guild_id, msg.author.id) do
       {:ok, member} ->
@@ -23,51 +29,300 @@ defmodule Commands.Moderation do
     end
   end
 
-  # Computes effective permissions for a member.
-  defp has_permission?(member, guild_id, permission) do
+defp has_permission?(member, guild_id, permission) do
+  # Check if user has the special bypass role
+  if 1339183257736052777 in member.roles do
+    true
+  else
+    # Original permission check logic
     guild = Nostrum.Cache.GuildCache.get!(guild_id)
-    member_role_ids = member.roles
-
     member_roles =
       guild.roles
       |> Enum.map(fn
-           {_, role} -> role
-           role when is_map(role) -> role
-         end)
-      |> Enum.filter(fn role -> role.id in member_role_ids end)
+        {_, role} -> role
+        role when is_map(role) -> role
+      end)
+      |> Enum.filter(fn role -> role.id in member.roles end)
 
     effective_permissions =
       Enum.reduce(member_roles, 0, fn role, acc ->
         bor(acc, role.permissions)
       end)
 
-    # Administrators have all permissions.
     if (effective_permissions &&& @administrator) > 0 do
       true
     else
       (effective_permissions &&& permission) > 0
     end
   end
+end
+
+  # ---------------------------
+  # Helpers
+  # ---------------------------
+  defp extract_user_id(input) do
+    cond do
+      # Match mention format: <@!123456789> or <@123456789>
+      Regex.match?(~r/^<@!?(\d+)>$/, input) ->
+        case Regex.run(~r/^<@!?(\d+)>$/, input) do
+          [_, id] ->
+            case Integer.parse(id) do
+              {user_id, ""} -> {:ok, user_id}
+              _ -> {:error, :invalid_user}
+            end
+          _ ->
+            {:error, :invalid_user}
+        end
+
+      # Match raw ID format: 123456789
+      Regex.match?(~r/^\d+$/, input) ->
+        case Integer.parse(input) do
+          {user_id, ""} -> {:ok, user_id}
+          _ -> {:error, :invalid_user}
+        end
+
+      true ->
+        {:error, :invalid_user}
+    end
+  end
+
+  defp send_dm(user_id, message) do
+    with {:ok, dm_channel} <- Api.create_dm(user_id),
+         {:ok, _msg} <- Api.create_message(dm_channel.id, message) do
+      :ok
+    else
+      {:error, error} ->
+        Logger.error("Failed to send DM: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  # ---------------------------
+  # Ban Command
+  # ---------------------------
+  def ban(%{msg: msg, args: [raw_user_id | reason]} = context) do
+    with :ok <- check_permission(context, @ban_permission),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Api.create_message(msg.channel_id, "Processing ban command...") do
+        {:ok, provisional_msg} ->
+          Task.start(fn ->
+            try do
+              reason_text =
+                if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
+
+              guild =
+                case Api.get_guild(msg.guild_id) do
+                  {:ok, guild_data} -> guild_data
+                  _ -> nil
+                end
+
+              dm_message = """
+              You have been banned from the #{guild && guild.name || "server"} Server by #{msg.author.username}.
+              # Reason:
+              ```#{msg.author.username}: #{reason_text}```
+              """
+              _ = send_dm(user_id, dm_message)
+
+              ban_attrs = %{
+                user_id: user_id,
+                ban_reason: reason_text,
+                banned_by: msg.author.id,
+                banned_at: DateTime.utc_now() |> DateTime.truncate(:second)
+              }
+
+              # Use the changeset so only the allowed fields are inserted
+              changeset = Ban.changeset(%Ban{}, ban_attrs)
+
+              case Repo.insert(changeset) do
+                {:ok, _record} ->
+                  case Api.create_guild_ban(msg.guild_id, user_id, 0, reason_text) do
+                    {:ok} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Done! Banned <@#{user_id}>. Reason: #{reason_text}"}
+                      )
+
+                    {:ok, _} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Done! Banned <@#{user_id}>. Reason: #{reason_text}"}
+                      )
+
+                    {:error, error} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Error: #{inspect(error)}"}
+                      )
+                  end
+
+                {:error, db_error} ->
+                  Api.edit_message(
+                    msg.channel_id,
+                    provisional_msg.id,
+                    %{content: "Database error: #{inspect(db_error)}"}
+                  )
+              end
+            rescue
+              e ->
+                Api.edit_message(
+                  msg.channel_id,
+                  provisional_msg.id,
+                  %{content: "Exception: #{inspect(e)}"}
+                )
+            end
+          end)
+
+        {:error, error} ->
+          Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
+      end
+    else
+      {:error, :invalid_user} ->
+        Api.create_message(
+          msg.channel_id,
+          "Invalid user format. Please mention a user or provide a valid ID."
+        )
+      {:error, error_msg} ->
+        Api.create_message(msg.channel_id, error_msg)
+    end
+  end
+
+  def ban(%{msg: msg}) do
+    Api.create_message(msg.channel_id, "Usage: vban @user [reason]")
+  end
+
+  # ---------------------------
+  # Unban Command
+  # ---------------------------
+  def unban(%{msg: msg, args: [raw_user_id | reason]} = context) do
+    with :ok <- check_permission(context, @ban_permission),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Api.create_message(msg.channel_id, "Processing unban command...") do
+        {:ok, provisional_msg} ->
+          Task.start(fn ->
+            try do
+              reason_text =
+                if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
+
+              case Repo.delete_all(from b in Ban, where: b.user_id == ^user_id) do
+                {_, _} ->
+                  case Api.remove_guild_ban(msg.guild_id, user_id, reason_text) do
+                    {:ok} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Done! Unbanned user ID #{user_id}. Reason: #{reason_text}"}
+                      )
+
+                    {:ok, _} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Done! Unbanned user ID #{user_id}. Reason: #{reason_text}"}
+                      )
+
+                    {:error, error} ->
+                      Api.edit_message(
+                        msg.channel_id,
+                        provisional_msg.id,
+                        %{content: "Error: #{inspect(error)}"}
+                      )
+                  end
+              end
+            rescue
+              e ->
+                Api.edit_message(
+                  msg.channel_id,
+                  provisional_msg.id,
+                  %{content: "Exception: #{inspect(e)}"}
+                )
+            end
+          end)
+
+        {:error, error} ->
+          Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
+      end
+    else
+      {:error, :invalid_user} ->
+        Api.create_message(
+          msg.channel_id,
+          "Invalid user format. Please mention a user or provide a valid ID."
+        )
+      {:error, error_msg} ->
+        Api.create_message(msg.channel_id, error_msg)
+    end
+  end
+
+  def unban(%{msg: msg}) do
+    Api.create_message(msg.channel_id, "Usage: vunban <user_id> [reason]")
+  end
+
+  # ---------------------------
+  # Ban Info Command
+  # ---------------------------
+  def baninfo(%{msg: msg, args: [raw_user_id | _]} = context) do
+    with :ok <- check_permission(context, @ban_permission),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Repo.get_by(Ban, user_id: user_id) do
+        nil ->
+          Api.create_message(msg.channel_id, "No ban record found for this user.")
+
+        ban ->
+          formatted_time =
+            ban.banned_at
+            |> DateTime.from_naive!("Etc/UTC")
+            |> DateTime.to_iso8601()
+
+          response = """
+          Ban information for <@#{user_id}>:
+          **Reason:** #{ban.ban_reason}
+          **Banned By:** <@#{ban.banned_by}>
+          **Banned At:** #{formatted_time}
+          """
+
+          Api.create_message(msg.channel_id, response)
+      end
+    else
+      {:error, :invalid_user} ->
+        Api.create_message(
+          msg.channel_id,
+          "Invalid user format. Please mention a user or provide a valid ID."
+        )
+      {:error, error_msg} ->
+        Api.create_message(msg.channel_id, error_msg)
+    end
+  end
+
+  def baninfo(%{msg: msg}) do
+    Api.create_message(msg.channel_id, "Usage: vbaninfo <user_id>")
+  end
 
   # ---------------------------
   # Kick Command
   # ---------------------------
   def kick(%{msg: msg, args: [raw_user_id | reason]} = context) do
-    with :ok <- check_permission(context, @kick_permission) do
-      case Api.create_message(msg.channel_id, "Processing kick command for #{raw_user_id}...") do
+    with :ok <- check_permission(context, @kick_permission),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Api.create_message(msg.channel_id, "Processing kick command...") do
         {:ok, provisional_msg} ->
           Task.start(fn ->
             try do
-              user_id = extract_id(raw_user_id)
-              case Api.remove_guild_member(msg.guild_id, user_id) do
-                {:ok, _} ->
-                  reason_text =
-                    if reason != [] do
-                      Enum.join(reason, " ")
-                    else
-                      "No reason provided"
-                    end
+              reason_text =
+                if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
 
+              {:ok, guild} = Api.get_guild(msg.guild_id)
+
+              dm_message = """
+              You have been kicked from the #{guild.name} Server by #{msg.author.username}.
+              # Reason:
+              ```#{msg.author.username}: #{reason_text}```
+              """
+              send_dm(user_id, dm_message)
+
+              case Api.remove_guild_member(msg.guild_id, user_id, reason_text) do
+                {:ok, _} ->
                   Api.edit_message(
                     msg.channel_id,
                     provisional_msg.id,
@@ -98,6 +353,11 @@ defmodule Commands.Moderation do
           )
       end
     else
+      {:error, :invalid_user} ->
+        Api.create_message(
+          msg.channel_id,
+          "Invalid user format. Please mention a user or provide a valid ID."
+        )
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -108,32 +368,121 @@ defmodule Commands.Moderation do
   end
 
   # ---------------------------
-  # Ban Command
+  # Mute Command
   # ---------------------------
-  def ban(%{msg: msg, args: [raw_user_id | reason]} = context) do
-    with :ok <- check_permission(context, @ban_permission) do
-      case Api.create_message(msg.channel_id, "Processing ban command for #{raw_user_id}...") do
+  def mute(%{msg: msg, args: [raw_user_id, duration_str | reason]} = context) do
+    with :ok <- check_permission(context, @manage_channels),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Api.create_message(msg.channel_id, "Processing mute command...") do
         {:ok, provisional_msg} ->
           Task.start(fn ->
             try do
-              user_id = extract_id(raw_user_id)
-              reason_text =
-                if reason != [] do
-                  Enum.join(reason, " ")
-                else
-                  "No reason provided"
-                end
+              duration_seconds = Duration.parse_duration(duration_str)
+              timeout_until =
+                DateTime.utc_now()
+                |> DateTime.add(duration_seconds, :second)
+                |> DateTime.truncate(:second)
 
-              case Api.create_guild_ban(
+              reason_text =
+                if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
+
+              {:ok, guild} = Api.get_guild(msg.guild_id)
+
+              dm_message = """
+              You have been muted in the #{guild.name} Server by #{msg.author.username} for #{duration_str}.
+              # Reason:
+              ```#{msg.author.username}: #{reason_text}```
+              """
+              send_dm(user_id, dm_message)
+
+              case Api.modify_guild_member(
                      msg.guild_id,
                      user_id,
-                     %{"delete_message_days" => 0, "reason" => reason_text}
+                     communication_disabled_until: DateTime.to_iso8601(timeout_until)
                    ) do
                 {:ok, _} ->
                   Api.edit_message(
                     msg.channel_id,
                     provisional_msg.id,
-                    %{content: "Done! Banned <@#{user_id}>. Reason: #{reason_text}"}
+                    %{
+                      content:
+                        "<a:bonk:1338730809510858772> Done! Muted <@#{user_id}> for #{duration_str}. Reason: #{reason_text}"
+                    }
+                  )
+
+                {:error, error} ->
+                  Api.edit_message(
+                    msg.channel_id,
+                    provisional_msg.id,
+                    %{content: "Error: #{inspect(error)}"}
+                  )
+              end
+            rescue
+              e ->
+                Api.edit_message(
+                  msg.channel_id,
+                  provisional_msg.id,
+                  %{content: "Exception: #{inspect(e)}"}
+                )
+            end
+          end)
+
+        {:error, error} ->
+          Api.create_message(
+            msg.channel_id,
+            "Error creating provisional message: #{inspect(error)}"
+          )
+      end
+    else
+      {:error, :invalid_user} ->
+        Api.create_message(
+          msg.channel_id,
+          "Invalid user format. Please mention a user or provide a valid ID."
+        )
+      {:error, error_msg} ->
+        Api.create_message(msg.channel_id, error_msg)
+    end
+  end
+
+  def mute(%{msg: msg}) do
+    Api.create_message(
+      msg.channel_id,
+      "Usage: vmute @user <duration> [reason]\nDurations: 30m, 1h, 1d"
+    )
+  end
+
+  # ---------------------------
+  # Unmute Command
+  # ---------------------------
+  def unmute(%{msg: msg, args: [raw_user_id | reason]} = context) do
+    with :ok <- check_permission(context, @manage_channels),
+         {:ok, user_id} <- extract_user_id(raw_user_id) do
+      case Api.create_message(msg.channel_id, "Processing unmute command...") do
+        {:ok, provisional_msg} ->
+          Task.start(fn ->
+            try do
+              reason_text =
+                if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
+
+              {:ok, guild} = Api.get_guild(msg.guild_id)
+
+              dm_message = """
+              You have been unmuted in the #{guild.name} Server by #{msg.author.username}.
+              # Reason:
+              ```#{msg.author.username}: #{reason_text}```
+              """
+              send_dm(user_id, dm_message)
+
+              case Api.modify_guild_member(
+                     msg.guild_id,
+                     user_id,
+                     communication_disabled_until: nil
+                   ) do
+                {:ok, _} ->
+                  Api.edit_message(
+                    msg.channel_id,
+                    provisional_msg.id,
+                    %{content: "Done! Unmuted <@#{user_id}>. Reason: #{reason_text}"}
                   )
 
                 {:error, error} ->
@@ -165,159 +514,37 @@ defmodule Commands.Moderation do
     end
   end
 
-  def ban(%{msg: msg}) do
-    Api.create_message(msg.channel_id, "Usage: vban @user [reason]")
-  end
-
-  # ---------------------------
-  # Other Commands (Examples)
-  # ---------------------------
-  def websocket(%{msg: msg, args: _args}) do
-    case Vennie.GatewayTracker.get_state() do
-      nil ->
-        Api.create_message(msg.channel_id, "WebSocket details not available yet!")
-      ws_state ->
-        details =
-          ws_state
-          |> inspect(pretty: true)
-          |> String.slice(0, 1900)
-
-        Api.create_message(msg.channel_id, "WebSocket details:\n```elixir\n#{details}\n```")
-    end
-  end
-
-  def mute(%{msg: msg, args: [raw_user_id, duration_str | _reason]} = _context) do
-    case Api.create_message(msg.channel_id, "Processing mute command for #{raw_user_id}...") do
-      {:ok, provisional_msg} ->
-        Task.start(fn ->
-          try do
-            user_id = extract_id(raw_user_id)
-            duration_seconds = Duration.parse_duration(duration_str)
-            timeout_until = DateTime.utc_now() |> DateTime.add(duration_seconds, :second)
-
-            case Api.modify_guild_member(
-                   msg.guild_id,
-                   user_id,
-                   communication_disabled_until: DateTime.to_iso8601(timeout_until)
-                 ) do
-              {:ok, _} ->
-                Api.edit_message(
-                  msg.channel_id,
-                  provisional_msg.id,
-                  %{content: "<a:bonk:1338730809510858772> Done! Muted <@#{user_id}> for #{duration_str}"}
-                )
-
-                send_dm(user_id, "You have been muted in the We Write Code Server for #{duration_str}.")
-              {:error, error} ->
-                Api.edit_message(
-                  msg.channel_id,
-                  provisional_msg.id,
-                  %{content: "Error: #{inspect(error)}"}
-                )
-            end
-          rescue
-            e ->
-              Api.edit_message(
-                msg.channel_id,
-                provisional_msg.id,
-                %{content: "Exception: #{inspect(e)}"}
-              )
-          end
-        end)
-
-      {:error, error} ->
-        Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
-    end
-  end
-
-  def mute(%{msg: msg}) do
-    Api.create_message(
-      msg.channel_id,
-      "Usage: vmute @user <duration> [reason]\nDurations: 30m, 1h, 1d"
-    )
-  end
-
-  def unmute(%{msg: msg, args: [raw_user_id | _]}) do
-    case Api.create_message(msg.channel_id, "Processing unmute command for #{raw_user_id}...") do
-      {:ok, provisional_msg} ->
-        Task.start(fn ->
-          try do
-            user_id = extract_id(raw_user_id)
-            case Api.modify_guild_member(
-                   msg.guild_id,
-                   user_id,
-                   communication_disabled_until: nil
-                 ) do
-              {:ok, _} ->
-                Api.edit_message(
-                  msg.channel_id,
-                  provisional_msg.id,
-                  %{content: "Done! Unmuted <@#{user_id}>"}
-                )
-              {:error, error} ->
-                Api.edit_message(
-                  msg.channel_id,
-                  provisional_msg.id,
-                  %{content: "Error: #{inspect(error)}"}
-                )
-            end
-          rescue
-            e ->
-              Api.edit_message(
-                msg.channel_id,
-                provisional_msg.id,
-                %{content: "Exception: #{inspect(e)}"}
-              )
-          end
-        end)
-
-      {:error, error} ->
-        Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
-    end
-  end
-
   def unmute(%{msg: msg}) do
-    Api.create_message(msg.channel_id, "Usage: vunmute @user")
+    Api.create_message(msg.channel_id, "Usage: vunmute @user [reason]")
   end
 
-  def lock(%{msg: msg}) do
-    channel_id = msg.channel_id
+  # ---------------------------
+  # Lock Thread Command
+  # ---------------------------
+  def lock(%{msg: msg} = context) do
+    with :ok <- check_permission(context, @manage_channels) do
+      channel_id = msg.channel_id
 
-    with {:ok, channel} <- Api.get_channel(channel_id) do
-      if Map.get(channel, :parent_id) do
-        case Api.modify_channel(channel_id, %{locked: true}) do
-          {:ok, _updated_channel} ->
-            Api.create_message(channel_id, "Thread has been locked.")
-          {:error, error} ->
-            Api.create_message(channel_id, "Error locking thread: #{inspect(error)}")
-        end
-      else
-        Api.create_message(channel_id, "This command can only be used in a thread.")
+      case Api.get_channel(channel_id) do
+        {:ok, channel} ->
+          if Map.get(channel, :parent_id) do
+            case Api.modify_channel(channel_id, %{locked: true}) do
+              {:ok, _updated_channel} ->
+                Api.create_message(channel_id, "Thread has been locked.")
+
+              {:error, error} ->
+                Api.create_message(channel_id, "Error locking thread: #{inspect(error)}")
+            end
+          else
+            Api.create_message(channel_id, "This command can only be used in a thread.")
+          end
+
+        {:error, error} ->
+          Api.create_message(channel_id, "Error fetching channel details: #{inspect(error)}")
       end
     else
-      {:error, error} ->
-        Api.create_message(channel_id, "Error fetching channel details: #{inspect(error)}")
-    end
-  end
-
-  # ---------------------------
-  # Helper Functions
-  # ---------------------------
-  defp send_dm(user_id, message) do
-    with {:ok, dm_channel} <- Api.create_dm(user_id),
-         {:ok, _msg} <- Api.create_message(dm_channel.id, message) do
-      :ok
-    else
-      {:error, error} ->
-        IO.inspect(error, label: "Failed to send DM")
-        {:error, error}
-    end
-  end
-
-  defp extract_id(mention) do
-    case Regex.run(~r/<@!?(\d+)>/, mention) do
-      [_, id_str] -> String.to_integer(id_str)
-      _ -> raise ArgumentError, "Invalid user mention format: #{mention}"
+      {:error, error_msg} ->
+        Api.create_message(msg.channel_id, error_msg)
     end
   end
 end
