@@ -12,9 +12,6 @@ defmodule Commands.Moderation do
   @administrator 0x00000008
   @manage_channels 0x00000010
 
-  # ---------------------------
-  # Permission Checking
-  # ---------------------------
   defp check_permission(%{msg: msg} = context, required_permission) do
     case Api.get_guild_member(msg.guild_id, msg.author.id) do
       {:ok, member} ->
@@ -30,11 +27,9 @@ defmodule Commands.Moderation do
   end
 
 defp has_permission?(member, guild_id, permission) do
-  # Check if user has the special bypass role
   if 1339183257736052777 in member.roles do
     true
   else
-    # Original permission check logic
     guild = Nostrum.Cache.GuildCache.get!(guild_id)
     member_roles =
       guild.roles
@@ -57,12 +52,8 @@ defp has_permission?(member, guild_id, permission) do
   end
 end
 
-  # ---------------------------
-  # Helpers
-  # ---------------------------
   defp extract_user_id(input) do
     cond do
-      # Match mention format: <@!123456789> or <@123456789>
       Regex.match?(~r/^<@!?(\d+)>$/, input) ->
         case Regex.run(~r/^<@!?(\d+)>$/, input) do
           [_, id] ->
@@ -74,7 +65,6 @@ end
             {:error, :invalid_user}
         end
 
-      # Match raw ID format: 123456789
       Regex.match?(~r/^\d+$/, input) ->
         case Integer.parse(input) do
           {user_id, ""} -> {:ok, user_id}
@@ -97,9 +87,6 @@ end
     end
   end
 
-  # ---------------------------
-  # Ban Command
-  # ---------------------------
   def ban(%{msg: msg, args: [raw_user_id | reason]} = context) do
     with :ok <- check_permission(context, @ban_permission),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -130,7 +117,6 @@ end
                 banned_at: DateTime.utc_now() |> DateTime.truncate(:second)
               }
 
-              # Use the changeset so only the allowed fields are inserted
               changeset = Ban.changeset(%Ban{}, ban_attrs)
 
               case Repo.insert(changeset) do
@@ -193,9 +179,6 @@ end
     Api.create_message(msg.channel_id, "Usage: vban @user [reason]")
   end
 
-  # ---------------------------
-  # Unban Command
-  # ---------------------------
   def unban(%{msg: msg, args: [raw_user_id | reason]} = context) do
     with :ok <- check_permission(context, @ban_permission),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -259,9 +242,6 @@ end
     Api.create_message(msg.channel_id, "Usage: vunban <user_id> [reason]")
   end
 
-  # ---------------------------
-  # Ban Info Command
-  # ---------------------------
   def baninfo(%{msg: msg, args: [raw_user_id | _]} = context) do
     with :ok <- check_permission(context, @ban_permission),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -299,9 +279,6 @@ end
     Api.create_message(msg.channel_id, "Usage: vbaninfo <user_id>")
   end
 
-  # ---------------------------
-  # Kick Command
-  # ---------------------------
   def kick(%{msg: msg, args: [raw_user_id | reason]} = context) do
     with :ok <- check_permission(context, @kick_permission),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -367,9 +344,6 @@ end
     Api.create_message(msg.channel_id, "Usage: vkick @user [reason]")
   end
 
-  # ---------------------------
-  # Mute Command
-  # ---------------------------
   def mute(%{msg: msg, args: [raw_user_id, duration_str | reason]} = context) do
     with :ok <- check_permission(context, @manage_channels),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -451,9 +425,6 @@ end
     )
   end
 
-  # ---------------------------
-  # Unmute Command
-  # ---------------------------
   def unmute(%{msg: msg, args: [raw_user_id | reason]} = context) do
     with :ok <- check_permission(context, @manage_channels),
          {:ok, user_id} <- extract_user_id(raw_user_id) do
@@ -518,9 +489,6 @@ end
     Api.create_message(msg.channel_id, "Usage: vunmute @user [reason]")
   end
 
-  # ---------------------------
-  # Lock Thread Command
-  # ---------------------------
   def lock(%{msg: msg} = context) do
     with :ok <- check_permission(context, @manage_channels) do
       channel_id = msg.channel_id

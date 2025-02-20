@@ -10,7 +10,6 @@ defmodule Commands.Miscellaneous do
     
     case Repo.one(query) do
       nil ->
-        # No record exists; generate a new random percentage and store it.
         gay = :rand.uniform(100)
         Repo.insert!(%HowGay{user_id: msg.author.id, howgay_percentage: gay})
         Api.Message.create(
@@ -20,8 +19,7 @@ defmodule Commands.Miscellaneous do
         )
         
       record ->
-        # Record exists; use the stored value.
-        Api.Message.create(
+       Api.Message.create(
           msg.channel_id,
           content: "You are #{record.howgay_percentage}% gay :rainbow:",
           message_reference: %{message_id: msg.id}

@@ -1,4 +1,10 @@
 defmodule Commands.Music do
+
+@moduledoc """
+ignore this mf for now i wanna delete this module but i am not confident enough if i can even rewrite this piece of shit ong
+"""
+
+
   use GenServer
   alias Nostrum.Api
   require Logger
@@ -7,7 +13,6 @@ defmodule Commands.Music do
   @forward_seconds 10
   @backward_seconds 10
 
-  # GenServer Callbacks
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -17,7 +22,6 @@ defmodule Commands.Music do
     {:ok, %{queues: %{}, volumes: %{}, current_tracks: %{}}}
   end
 
-  # Client API
 
   def queue_add(guild_id, url, title) do
     GenServer.cast(__MODULE__, {:queue_add, guild_id, url, title})
@@ -51,7 +55,6 @@ defmodule Commands.Music do
     GenServer.call(__MODULE__, {:get_current_track, guild_id})
   end
 
-  # GenServer Handlers
 
   def handle_cast({:queue_add, guild_id, url, title}, state) do
     queue = Map.get(state.queues, guild_id, [])
@@ -90,7 +93,6 @@ defmodule Commands.Music do
     {:reply, Map.get(state.current_tracks, guild_id), state}
   end
 
-  # Command Handlers
 
   def handle_join(%{msg: msg, args: [channel_id_str | _]}) do
     channel_id =
@@ -220,7 +222,6 @@ defmodule Commands.Music do
     end
   end
 
-  # Helper Functions
 
   defp ensure_voice_connection(msg) do
     case get_voice_channel(msg) do
@@ -293,7 +294,6 @@ defmodule Commands.Music do
     end
   end
 
-  # Modified play_track/4 now calls our new download function that shows progress.
   defp play_track(guild_id, channel_id, source, title) do
     if String.starts_with?(source, "http") do
       case download_youtube_audio(source, channel_id) do
@@ -361,7 +361,6 @@ defmodule Commands.Music do
     end
   end
 
-  # New download_youtube_audio function that displays progress in the text channel
   defp download_youtube_audio(url, channel_id) do
     file_path = "#{System.tmp_dir()}/#{:rand.uniform(999_999)}.mp3"
     args = [
