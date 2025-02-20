@@ -18,7 +18,6 @@ end
 config :nostrum,
   token: System.get_env("TOKEN"), 
   gateway_intents: :all,
-  force_http1: true,
   streamlink: false,
   youtubedl: false
 
