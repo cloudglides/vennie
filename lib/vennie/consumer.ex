@@ -4,7 +4,7 @@ defmodule Vennie.Consumer do
 
   @prefix ~w(v V)
   @required_role_id 1339183257736052777
-  @misc_commands ~w(howgay hg rank r)
+  @misc_commands ~w(howdumb hd rank r)
   @mod_commands ~w(websocket ws mute m unmute um lock l)
   @ranks_channel_id 1022644903248920656
   @help_channel_id 1068808327716405329
@@ -125,7 +125,7 @@ end
   #defp execute_command(cmd, context) when cmd in ["skip", "s"], do: Commands.Music.skip(context)
   #defp execute_command(cmd, context) when cmd in ["forward", "fw"], do: Commands.Music.forward(context)
   #defp execute_command(cmd, context) when cmd in ["p", "play"], do: Commands.Music.handle_play(context)
-  defp execute_command(cmd, context) when cmd in ["howgay", "hg"], do: Commands.Miscellaneous.howgay(context)
+  defp execute_command(cmd, context) when cmd in ["howdumb", "hd"], do: Commands.Miscellaneous.howgay(context)
   defp execute_command(cmd, context) when cmd in ["websocket", "ws"], do: Commands.Utils.websocket(context)
   defp execute_command(cmd, context) when cmd in ["mute", "m"], do: Commands.Moderation.mute(context)
   defp execute_command(cmd, context) when cmd in ["wb", "whyban", "whybanne"], do: Commands.Moderation.baninfo(context)

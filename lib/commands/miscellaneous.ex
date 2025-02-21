@@ -14,14 +14,14 @@ defmodule Commands.Miscellaneous do
         Repo.insert!(%HowGay{user_id: msg.author.id, howgay_percentage: gay})
         Api.Message.create(
           msg.channel_id,
-          content: "You are #{gay}% gay :rainbow:",
+          content: "You are #{gay}% dumb <:dumb:1342556626351161516>",
           message_reference: %{message_id: msg.id}
         )
         
       record ->
        Api.Message.create(
           msg.channel_id,
-          content: "You are #{record.howgay_percentage}% gay :rainbow:",
+          content: "You are #{record.howgay_percentage}% dumb <:dumb:1342556626351161516>",
           message_reference: %{message_id: msg.id}
         )
     end
