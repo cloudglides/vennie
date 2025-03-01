@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  vennie:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vennie-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+    volumes:
+      - ./priv/repo:/app/priv/repo

@@ -1,5 +1,5 @@
 defmodule Vennie.Consumer do
-  use Nostrum.Consumer
+  @behaviour Nostrum.Consumer
   require Logger
 
   @prefix ~w(v V)
@@ -14,8 +14,8 @@ defmodule Vennie.Consumer do
   ]
 
   def handle_event({:READY, _data, ws_state}) do
-    Nostrum.Api.update_status(:online, "Elixir <3", 0)
     Vennie.GatewayTracker.set_state(ws_state)
+     Nostrum.Api.Self.update_status(:online, {:watching, "We Write Code"})
   end
 
 def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
@@ -78,7 +78,6 @@ end
           execute_command(command, context)
         else
           if is_nil(msg.guild_id) do
-            Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
             :ignore
           else
             case Nostrum.Api.get_guild_member(msg.guild_id, msg.author.id) do
@@ -86,7 +85,6 @@ end
                 if Enum.member?(member.roles, @required_role_id) do
                   execute_command(command, context)
                 else
-                  Nostrum.Api.create_reaction(msg.channel_id, msg.id, "❌")
                   :ignore
                 end
 

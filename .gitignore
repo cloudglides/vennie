@@ -29,7 +29,7 @@ vennie-*.tar
 
 .envrc
 .direnv
-
+.env
 
 #env bs
 /config/.env.exs
