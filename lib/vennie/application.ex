@@ -11,10 +11,10 @@ defmodule Vennie.Application do
 
     children = [
       {Nostrum.Bot, bot_options},
-      Vennie.NetworkMonitor,
       Vennie.GatewayTracker,
       Vennie.Repo,
-      Commands.Music
+      Commands.Music,
+      {Bandit, plug: Vennie.Router, scheme: :http, port: 3333}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)

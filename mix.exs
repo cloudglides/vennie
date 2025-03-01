@@ -22,6 +22,8 @@ defmodule Vennie.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:plug, "~> 1.15"},
+    {:bandit, "~> 1.0"},
    {:nostrum, github: "Kraigie/nostrum"},
    {:telemetry, "~> 1.0"},
    {:ecto_sql, "~> 3.10"},
