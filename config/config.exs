@@ -8,10 +8,3 @@ config :vennie, Vennie.Repo,
   pool_size: 10,
   show_sensitive_data_on_connection_error: true
 
-if config_env() in [:dev, :test] do
-  for path <- [".env.exs", ".env.#{config_env()}.exs"] do
-    path = Path.join(__DIR__, "..") |> Path.join("config") |> Path.join(path) |> Path.expand()
-    if File.exists?(path), do: import_config(path)
-  end
-end
-
