@@ -1,0 +1,7 @@
+_build/
+deps/
+Dockerfile
+.gitignore
+.git/
+*.md
+.env

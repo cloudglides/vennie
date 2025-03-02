@@ -26,15 +26,13 @@
 
     devShells = forEachSupportedSystem ({pkgs}: let
       dockerfileContent = ''
-        FROM docker.io/hexpm/elixir:1.17.3-erlang-27.2.2-ubuntu-focal-20241011
+              FROM elixir:1.17.3-otp-27-alpine AS builder
 
         ENV MIX_ENV=prod
 
-        RUN apt-get update -y && \
-            apt-get install -y git-core && \
-            rm -rf /var/lib/apt/lists/*
+        RUN apk add --no-cache git
 
-        WORKDIR /bot
+        WORKDIR /app
 
         COPY mix.exs mix.lock ./
 
@@ -43,9 +41,19 @@
 
         COPY . .
 
-        RUN mix compile
+        RUN mix release --no-deps-check --overwrite
 
-        CMD ["mix", "run", "--no-halt"]
+        FROM alpine:3.20.2
+
+        ENV MIX_ENV=prod
+
+        RUN apk add --no-cache openssl ncurses-libs libgcc libstdc++
+
+        WORKDIR /app
+
+        COPY --from=builder /app/_build/prod/rel/vennie ./
+
+        CMD ["./bin/vennie", "start"]
 
       '';
 
