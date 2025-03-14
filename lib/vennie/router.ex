@@ -1,8 +1,8 @@
 defmodule Vennie.Router do
   use Plug.Router
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   get "/health" do
     send_resp(conn, 200, "OK")
@@ -12,4 +12,3 @@ defmodule Vennie.Router do
     send_resp(conn, 404, "Not found")
   end
 end
-

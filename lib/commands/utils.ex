@@ -17,7 +17,7 @@ defmodule Commands.Utils do
     case parse_code_block(args) do
       {:ok, language, code} ->
         execute_code(msg, language, code)
-      
+
       {:error, reason} ->
         Api.Message.create(
           msg.channel_id,
@@ -30,17 +30,21 @@ defmodule Commands.Utils do
   # Join args with newlines and extract the language and code block.
   defp parse_code_block(args) do
     full_text = Enum.join(args, "\n")
-    
+
     case Regex.run(~r/```(\w+)\n(.*?)```/sm, full_text) do
       [_, lang, code] ->
         normalized_lang = String.downcase(lang)
+
         if Map.has_key?(@supported_languages, normalized_lang) do
           {:ok, normalized_lang, String.trim(code)}
         else
-          {:error, "Unsupported language. Supported languages: #{Map.keys(@supported_languages) |> Enum.join(", ")}"}
+          {:error,
+           "Unsupported language. Supported languages: #{Map.keys(@supported_languages) |> Enum.join(", ")}"}
         end
+
       nil ->
-        {:error, "Please provide a code block with a language specifier (e.g., ```python\nprint('Hello')\n```)"}
+        {:error,
+         "Please provide a code block with a language specifier (e.g., ```python\nprint('Hello')\n```)"}
     end
   end
 
@@ -49,11 +53,13 @@ defmodule Commands.Utils do
     case send_to_execution_service(language, code) do
       {:ok, %{"output" => output, "error" => error}} ->
         response = prepare_response(output, error)
+
         Api.Message.create(
           msg.channel_id,
           content: "```\n#{response}\n```",
           message_reference: %{message_id: msg.id}
         )
+
       {:error, reason} ->
         Api.Message.create(
           msg.channel_id,
@@ -68,9 +74,10 @@ defmodule Commands.Utils do
     # Build the endpoint using the glot.io language slug.
     endpoint = "https://run.glot.io/languages/#{@supported_languages[language]}/latest"
     token = System.get_env("GLOT_TOKEN") || "your_api_token_here"
-    
+
     # The API expects a JSON payload with a "files" key.
     payload = Jason.encode!(%{"files" => [%{"name" => "main", "content" => code}]})
+
     headers = [
       {"Content-Type", "application/json"},
       {"Authorization", "Token #{token}"}
@@ -84,12 +91,14 @@ defmodule Commands.Utils do
             output = Map.get(result, "stdout", "")
             error = Map.get(result, "stderr", "")
             {:ok, %{"output" => output, "error" => error}}
+
           {:error, decode_error} ->
             {:error, "Failed to decode response: #{inspect(decode_error)}"}
         end
 
       {:ok, %HTTPoison.Response{status_code: code, body: body}} ->
         {:error, "Service returned status #{code}: #{body}"}
+
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, "HTTP request failed: #{inspect(reason)}"}
     end
@@ -112,6 +121,7 @@ defmodule Commands.Utils do
     case Vennie.GatewayTracker.get_state() do
       nil ->
         Api.Message.create(msg.channel_id, "WebSocket details not available yet!")
+
       ws_state ->
         details =
           ws_state
@@ -122,4 +132,3 @@ defmodule Commands.Utils do
     end
   end
 end
-

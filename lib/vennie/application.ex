@@ -4,6 +4,7 @@ defmodule Vennie.Application do
   @impl true
   def start(_type, _args) do
     Vennie.GatewayTracker.init_ets()
+
     bot_options = %{
       consumer: Vennie.Consumer,
       intents: :all,

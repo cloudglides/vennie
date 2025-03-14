@@ -16,4 +16,3 @@ defmodule Vennie.GatewayTracker do
     end
   end
 end
-

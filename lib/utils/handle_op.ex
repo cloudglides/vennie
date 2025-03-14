@@ -1,6 +1,7 @@
 defmodule HandleOp do
   require Logger
   use GenServer
+
   def start_link(_) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
   end
@@ -28,8 +29,9 @@ defmodule HandleOp do
 
   def handle_call({:get_userid, messageid}, _from, state) do
     case Map.get(state, messageid) do
-      nil -> 
+      nil ->
         {:reply, nil, state}
+
       %{userid: userid, timestamp: timestamp} ->
         if :os.system_time(:seconds) - timestamp < 60 do
           {:reply, userid, state}
@@ -39,6 +41,7 @@ defmodule HandleOp do
         end
     end
   end
+
   def handle_info({:expire_message, messageid}, state) do
     new_state = Map.delete(state, messageid)
     {:noreply, new_state}

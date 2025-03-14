@@ -3,10 +3,10 @@ defmodule Vennie.Ban do
   import Ecto.Changeset
 
   schema "bans" do
-    field :user_id, :integer
-    field :ban_reason, :string
-    field :banned_by, :integer
-    field :banned_at, :utc_datetime
+    field(:user_id, :integer)
+    field(:ban_reason, :string)
+    field(:banned_by, :integer)
+    field(:banned_at, :utc_datetime)
 
     timestamps()
   end

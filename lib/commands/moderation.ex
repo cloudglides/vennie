@@ -26,31 +26,32 @@ defmodule Commands.Moderation do
     end
   end
 
-defp has_permission?(member, guild_id, permission) do
-  if 1339183257736052777 in member.roles do
-    true
-  else
-    guild = Nostrum.Cache.GuildCache.get!(guild_id)
-    member_roles =
-      guild.roles
-      |> Enum.map(fn
-        {_, role} -> role
-        role when is_map(role) -> role
-      end)
-      |> Enum.filter(fn role -> role.id in member.roles end)
-
-    effective_permissions =
-      Enum.reduce(member_roles, 0, fn role, acc ->
-        bor(acc, role.permissions)
-      end)
-
-    if (effective_permissions &&& @administrator) > 0 do
+  defp has_permission?(member, guild_id, permission) do
+    if 1_339_183_257_736_052_777 in member.roles do
       true
     else
-      (effective_permissions &&& permission) > 0
+      guild = Nostrum.Cache.GuildCache.get!(guild_id)
+
+      member_roles =
+        guild.roles
+        |> Enum.map(fn
+          {_, role} -> role
+          role when is_map(role) -> role
+        end)
+        |> Enum.filter(fn role -> role.id in member.roles end)
+
+      effective_permissions =
+        Enum.reduce(member_roles, 0, fn role, acc ->
+          bor(acc, role.permissions)
+        end)
+
+      if (effective_permissions &&& @administrator) > 0 do
+        true
+      else
+        (effective_permissions &&& permission) > 0
+      end
     end
   end
-end
 
   defp extract_user_id(input) do
     cond do
@@ -61,6 +62,7 @@ end
               {user_id, ""} -> {:ok, user_id}
               _ -> {:error, :invalid_user}
             end
+
           _ ->
             {:error, :invalid_user}
         end
@@ -104,10 +106,11 @@ end
                 end
 
               dm_message = """
-              You have been banned from the #{guild && guild.name || "server"} Server by #{msg.author.username}.
+              You have been banned from the #{(guild && guild.name) || "server"} Server by #{msg.author.username}.
               # Reason:
               ```#{msg.author.username}: #{reason_text}```
               """
+
               _ = send_dm(user_id, dm_message)
 
               ban_attrs = %{
@@ -162,7 +165,10 @@ end
           end)
 
         {:error, error} ->
-          Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
+          Api.create_message(
+            msg.channel_id,
+            "Error creating provisional message: #{inspect(error)}"
+          )
       end
     else
       {:error, :invalid_user} ->
@@ -170,6 +176,7 @@ end
           msg.channel_id,
           "Invalid user format. Please mention a user or provide a valid ID."
         )
+
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -189,7 +196,7 @@ end
               reason_text =
                 if reason != [], do: Enum.join(reason, " "), else: "No reason provided"
 
-              case Repo.delete_all(from b in Ban, where: b.user_id == ^user_id) do
+              case Repo.delete_all(from(b in Ban, where: b.user_id == ^user_id)) do
                 {_, _} ->
                   case Api.remove_guild_ban(msg.guild_id, user_id, reason_text) do
                     {:ok} ->
@@ -225,7 +232,10 @@ end
           end)
 
         {:error, error} ->
-          Api.create_message(msg.channel_id, "Error creating provisional message: #{inspect(error)}")
+          Api.create_message(
+            msg.channel_id,
+            "Error creating provisional message: #{inspect(error)}"
+          )
       end
     else
       {:error, :invalid_user} ->
@@ -233,6 +243,7 @@ end
           msg.channel_id,
           "Invalid user format. Please mention a user or provide a valid ID."
         )
+
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -270,6 +281,7 @@ end
           msg.channel_id,
           "Invalid user format. Please mention a user or provide a valid ID."
         )
+
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -296,6 +308,7 @@ end
               # Reason:
               ```#{msg.author.username}: #{reason_text}```
               """
+
               send_dm(user_id, dm_message)
 
               case Api.remove_guild_member(msg.guild_id, user_id, reason_text) do
@@ -335,6 +348,7 @@ end
           msg.channel_id,
           "Invalid user format. Please mention a user or provide a valid ID."
         )
+
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -352,6 +366,7 @@ end
           Task.start(fn ->
             try do
               duration_seconds = Duration.parse_duration(duration_str)
+
               timeout_until =
                 DateTime.utc_now()
                 |> DateTime.add(duration_seconds, :second)
@@ -367,6 +382,7 @@ end
               # Reason:
               ```#{msg.author.username}: #{reason_text}```
               """
+
               send_dm(user_id, dm_message)
 
               case Api.modify_guild_member(
@@ -413,6 +429,7 @@ end
           msg.channel_id,
           "Invalid user format. Please mention a user or provide a valid ID."
         )
+
       {:error, error_msg} ->
         Api.create_message(msg.channel_id, error_msg)
     end
@@ -442,6 +459,7 @@ end
               # Reason:
               ```#{msg.author.username}: #{reason_text}```
               """
+
               send_dm(user_id, dm_message)
 
               case Api.modify_guild_member(
@@ -516,4 +534,3 @@ end
     end
   end
 end
-
