@@ -1,3 +1,6 @@
+# Ignore artifacts:
+build
+coverage
 /_build/
 /cover/
 /deps/
@@ -11,3 +14,4 @@ vennie-*.tar
 .direnv
 .env
 /config/.env.exs
+

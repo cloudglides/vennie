@@ -1,5 +1,6 @@
 defmodule Vennie.Consumer do
   @behaviour Nostrum.Consumer
+  alias Nostrum.Api
   require Logger
 
   @prefix ~w(v V)
@@ -17,6 +18,10 @@ defmodule Vennie.Consumer do
     Vennie.GatewayTracker.set_state(ws_state)
      Nostrum.Api.Self.update_status(:online, {:watching, "We Write Code"})
   end
+def handle_event({:INTERACTION_CREATE, msg, _ws_state}) do
+Vennie.Events.interaction(msg)
+  end
+
 
 def handle_event({:MESSAGE_CREATE, msg, _ws_state}) do
   Logger.debug("Received message: #{msg.content}")
@@ -101,19 +106,42 @@ end
     end
   end
 
-  defp parse_command(content) do
-    parts = String.split(content)
-    Logger.debug("Split parts: #{inspect(parts)}")
+defp parse_command(content) do
+  parts = String.split(content)
+  Logger.debug("Split parts: #{inspect(parts)}")
 
-    case parts do
-      [<<prefix::binary-size(1), command::binary>> | args] when prefix in @prefix ->
-        Logger.debug("Prefix: #{prefix}, Command: #{command}")
-        {command, args}
+  case parts do
+    [first | rest] ->
+      # Split the first element into the prefix and the remainder
+      <<prefix::binary-size(1), remainder::binary>> = first
 
-      _ ->
+      if prefix in @prefix do
+        # Check if the remainder contains an inline code block delimiter
+        if String.contains?(remainder, "```") do
+          # Split the remainder into the command and the code block start
+          {command, code_part} = String.split_at(remainder, 1)
+          if String.starts_with?(code_part, "```") do
+            # Prepend the missing "```" to the code block and adjust args
+            new_args = [code_part | rest]
+            Logger.debug("Prefix: #{prefix}, Command: #{command}")
+            {command, new_args}
+          else
+            Logger.debug("Prefix: #{prefix}, Command: #{remainder}")
+            {remainder, rest}
+          end
+        else
+          Logger.debug("Prefix: #{prefix}, Command: #{remainder}")
+          {remainder, rest}
+        end
+      else
         :invalid
-    end
+      end
+
+    _ ->
+      :invalid
   end
+end
+
 
   defp execute_command(cmd, context) when cmd in ["rank", "r"], do: Commands.Ranks.handle_rank(context)
   #defp execute_command(cmd, context) when cmd in ["join", "j"], do: Commands.Music.handle_join(context)
@@ -124,6 +152,8 @@ end
   #defp execute_command(cmd, context) when cmd in ["forward", "fw"], do: Commands.Music.forward(context)
   #defp execute_command(cmd, context) when cmd in ["p", "play"], do: Commands.Music.handle_play(context)
   defp execute_command(cmd, context) when cmd in ["howdumb", "hd"], do: Commands.Miscellaneous.howgay(context)
+  defp execute_command(cmd, context) when cmd in ["e", "eval", "exec"], do: Commands.Utils.execute(context)
+  defp execute_command(cmd, context) when cmd in ["help", "h"], do: Commands.Miscellaneous.help(context)
   defp execute_command(cmd, context) when cmd in ["websocket", "ws"], do: Commands.Utils.websocket(context)
   defp execute_command(cmd, context) when cmd in ["mute", "m"], do: Commands.Moderation.mute(context)
   defp execute_command(cmd, context) when cmd in ["wb", "whyban", "whybanne"], do: Commands.Moderation.baninfo(context)

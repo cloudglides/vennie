@@ -3,6 +3,7 @@ defmodule Vennie.Application do
 
   @impl true
   def start(_type, _args) do
+    Vennie.GatewayTracker.init_ets()
     bot_options = %{
       consumer: Vennie.Consumer,
       intents: :all,
@@ -11,9 +12,9 @@ defmodule Vennie.Application do
 
     children = [
       {Nostrum.Bot, bot_options},
-      Vennie.GatewayTracker,
       Vennie.Repo,
       Commands.Music,
+      HandleOp,
       {Bandit, plug: Vennie.Router, scheme: :http, port: 3333}
     ]
 

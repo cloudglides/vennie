@@ -23,13 +23,19 @@ defmodule Vennie.MixProject do
   defp deps do
     [
       {:plug, "~> 1.15"},
-    {:bandit, "~> 1.0"},
-   {:nostrum, github: "Kraigie/nostrum"},
-   {:telemetry, "~> 1.0"},
-   {:ecto_sql, "~> 3.10"},
-    {:ecto_sqlite3, "~> 0.12"},
+     {:bandit, "~> 1.0"},
+      {:nostrum, github: "Kraigie/nostrum"},
+      {:telemetry, "~> 1.0"},
+      {:ecto_sql, "~> 3.10"},
+      {:ecto_sqlite3, "~> 0.12"},
       {:jason, "~> 1.2"},
-{:porcelain, "~> 2.0"}
+      {:porcelain, "~> 2.0"},
+      {:httpoison, "~> 2.0"},
+      {:hackney, "~> 1.18"},
+      {:idna, "~> 6.1"},
+      {:unicode_util_compat, "~> 0.4"},
+      {:mimerl, "~> 1.2"},
+      {:parse_trans, "~> 3.3"}
     ]
   end
 end
