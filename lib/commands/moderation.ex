@@ -12,6 +12,70 @@ defmodule Commands.Moderation do
   @administrator 0x00000008
   @manage_channels 0x00000010
 
+  defp fetch_messages(channel_id, amount) when is_integer(amount) do
+    # Make sure amount is a positive integer
+    amount = max(1, min(100, amount))
+
+    case Nostrum.Api.get_channel_messages(channel_id, amount) do
+      {:ok, messages} ->
+        message_ids =
+          messages
+          |> Enum.filter(fn msg ->
+            # 14 days
+            DateTime.diff(DateTime.utc_now(), msg.timestamp, :second) < 1_209_600
+          end)
+          |> Enum.map(& &1.id)
+
+        # Try several possible bulk delete function names
+        result = try_bulk_delete(channel_id, message_ids)
+
+        case result do
+          :ok ->
+            Nostrum.Api.create_message(
+              channel_id,
+              "Bulk deleted #{length(message_ids)} messages."
+            )
+
+          {:error, reason} ->
+            IO.inspect(reason, label: "Bulk delete error")
+
+            Nostrum.Api.create_message(
+              channel_id,
+              "Error during bulk deletion: #{inspect(reason)}"
+            )
+        end
+
+      error ->
+        IO.inspect(error, label: "Error fetching messages")
+        Nostrum.Api.create_message(channel_id, "Error fetching messages.")
+    end
+  end
+
+  # Try different bulk delete functions that might exist in Nostrum
+  defp try_bulk_delete(channel_id, message_ids) do
+    cond do
+      function_exported?(Nostrum.Api, :delete_messages, 2) ->
+        Nostrum.Api.delete_messages(channel_id, message_ids)
+
+      function_exported?(Nostrum.Api.Channel, :delete_messages, 2) ->
+        Nostrum.Api.Channel.delete_messages(channel_id, message_ids)
+
+      function_exported?(Nostrum.Api.Channel, :bulk_delete_messages, 2) ->
+        Nostrum.Api.Channel.bulk_delete_messages(channel_id, message_ids)
+
+      true ->
+        # Fallback to individual deletion if no bulk function exists
+        Enum.each(message_ids, fn id ->
+          Nostrum.Api.delete_message(channel_id, id)
+          Process.sleep(300)
+        end)
+
+        :ok
+    end
+  rescue
+    e -> {:error, e}
+  end
+
   defp check_permission(%{msg: msg} = context, required_permission) do
     case Api.get_guild_member(msg.guild_id, msg.author.id) do
       {:ok, member} ->

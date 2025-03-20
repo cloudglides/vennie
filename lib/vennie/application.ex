@@ -3,8 +3,7 @@ defmodule Vennie.Application do
 
   @impl true
   def start(_type, _args) do
-    Vennie.GatewayTracker.init_ets()
-
+     Vennie.EmojiCache.init()
     bot_options = %{
       consumer: Vennie.Consumer,
       intents: :all,
@@ -16,6 +15,8 @@ defmodule Vennie.Application do
       Vennie.Repo,
       Commands.Music,
       HandleOp,
+      Vennie.MessageCache,
+      Vennie.DeletedMessageStore,
       {Bandit, plug: Vennie.Router, scheme: :http, port: 3333}
     ]
 
